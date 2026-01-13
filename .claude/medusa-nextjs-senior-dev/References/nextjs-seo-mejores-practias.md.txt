@@ -1,0 +1,523 @@
+Next.js App Router - SEO y Mejores Prácticas
+Estructura de Proyecto Frontend
+storefront/
+├── src/
+│   ├── app/                    # App Router
+│   │   ├── (tienda)/          # Grupo de rutas sin layout
+│   │   │   ├── productos/
+│   │   │   ├── carrito/
+│   │   │   └── checkout/
+│   │   ├── layout.tsx         # Layout raíz
+│   │   ├── page.tsx           # Home
+│   │   └── not-found.tsx      # 404 personalizado
+│   ├── componentes/           # Componentes reutilizables
+│   │   ├── ui/               # Componentes base
+│   │   ├── productos/        # Dominio productos
+│   │   ├── carrito/          # Dominio carrito
+│   │   └── layout/           # Componentes de layout
+│   ├── lib/                   # Utilidades y lógica
+│   │   ├── medusa/           # Cliente Medusa
+│   │   ├── utils/            # Funciones helper
+│   │   └── hooks/            # Custom hooks
+│   ├── tipos/                 # TypeScript types
+│   └── estilos/              # Estilos globales
+├── public/                    # Assets estáticos
+│   ├── robots.txt
+│   └── sitemap.xml
+└── next.config.ts
+SEO - Metadata API
+Layout Raíz con Metadata
+typescript// src/app/layout.tsx
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL!),
+  title: {
+    default: "Mi Tienda - Ecommerce de Calidad",
+    template: "%s | Mi Tienda"
+  },
+  description: "Descripción optimizada para SEO con palabras clave relevantes",
+  keywords: ["ecommerce", "tienda online", "productos"],
+  authors: [{ name: "Tu Empresa" }],
+  creator: "Tu Empresa",
+  publisher: "Tu Empresa",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "es_AR",
+    url: process.env.NEXT_PUBLIC_BASE_URL,
+    siteName: "Mi Tienda",
+    title: "Mi Tienda - Ecommerce de Calidad",
+    description: "Descripción para redes sociales",
+    images: [
+      {
+        url: "/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "Mi Tienda",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Mi Tienda",
+    description: "Descripción para Twitter",
+    creator: "@tuusuario",
+    images: ["/twitter-image.jpg"],
+  },
+  alternates: {
+    canonical: process.env.NEXT_PUBLIC_BASE_URL,
+  },
+  verification: {
+    google: "código-de-verificación-google",
+  },
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="es">
+      <body>{children}</body>
+    </html>
+  )
+}
+Metadata Dinámica en Páginas
+typescript// src/app/productos/[handle]/page.tsx
+import type { Metadata } from "next"
+import { obtenerProductoPorHandle } from "@/lib/medusa/productos"
+
+type Props = {
+  params: { handle: string }
+  searchParams: { [key: string]: string | string[] | undefined }
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const producto = await obtenerProductoPorHandle(params.handle)
+
+  if (!producto) {
+    return {
+      title: "Producto no encontrado",
+    }
+  }
+
+  return {
+    title: producto.title,
+    description: producto.description || `Compra ${producto.title} en nuestra tienda`,
+    openGraph: {
+      title: producto.title,
+      description: producto.description,
+      images: producto.thumbnail ? [
+        {
+          url: producto.thumbnail,
+          width: 800,
+          height: 600,
+          alt: producto.title,
+        }
+      ] : [],
+      type: "product",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: producto.title,
+      description: producto.description,
+      images: producto.thumbnail ? [producto.thumbnail] : [],
+    },
+    alternates: {
+      canonical: `/productos/${params.handle}`,
+    },
+  }
+}
+
+export default async function PaginaProducto({ params }: Props) {
+  const producto = await obtenerProductoPorHandle(params.handle)
+  
+  return (
+    <main>
+      <ProductoDetalle producto={producto} />
+    </main>
+  )
+}
+JSON-LD para Datos Estructurados
+typescript// src/componentes/seo/JsonLd.tsx
+export function ProductoJsonLd({ producto }: { producto: Producto }) {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: producto.title,
+    description: producto.description,
+    image: producto.thumbnail,
+    offers: {
+      "@type": "Offer",
+      price: producto.variants[0]?.prices[0]?.amount / 100,
+      priceCurrency: "ARS",
+      availability: producto.variants[0]?.inventory_quantity > 0
+        ? "https://schema.org/InStock"
+        : "https://schema.org/OutOfStock",
+    },
+  }
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  )
+}
+Server Components y Client Components
+Server Component (Por Defecto)
+typescript// src/app/productos/page.tsx
+// ✅ Server Component - Sin "use client"
+import { listarProductos } from "@/lib/medusa/productos"
+
+export default async function PaginaProductos() {
+  // Fetch directo en el servidor
+  const productos = await listarProductos()
+
+  return (
+    <div>
+      <h1>Productos</h1>
+      <ListaProductos productos={productos} />
+    </div>
+  )
+}
+Client Component (Interactividad)
+typescript// src/componentes/productos/BotonAgregarCarrito.tsx
+"use client"
+
+import { useState } from "react"
+import { agregarAlCarrito } from "@/lib/carrito/acciones"
+
+export function BotonAgregarCarrito({ 
+  productoId 
+}: { 
+  productoId: string 
+}) {
+  const [cargando, setCargando] = useState(false)
+
+  async function manejarClick() {
+    setCargando(true)
+    await agregarAlCarrito(productoId)
+    setCargando(false)
+  }
+
+  return (
+    <button 
+      onClick={manejarClick}
+      disabled={cargando}
+      className="boton-primario"
+    >
+      {cargando ? "Agregando..." : "Agregar al Carrito"}
+    </button>
+  )
+}
+Server Actions
+typescript// src/lib/carrito/acciones.ts
+"use server"
+
+import { cookies } from "next/headers"
+import { revalidatePath } from "next/cache"
+import { clienteMedusa } from "@/lib/medusa/cliente"
+
+export async function agregarAlCarrito(variantId: string) {
+  const cookieStore = await cookies()
+  const carritoId = cookieStore.get("carrito_id")?.value
+
+  try {
+    if (!carritoId) {
+      // Crear nuevo carrito
+      const { cart } = await clienteMedusa.carts.create({})
+      cookieStore.set("carrito_id", cart.id)
+      
+      await clienteMedusa.carts.lineItems.create(cart.id, {
+        variant_id: variantId,
+        quantity: 1,
+      })
+    } else {
+      // Agregar al carrito existente
+      await clienteMedusa.carts.lineItems.create(carritoId, {
+        variant_id: variantId,
+        quantity: 1,
+      })
+    }
+
+    // Revalidar rutas relacionadas
+    revalidatePath("/carrito")
+    
+    return { success: true }
+  } catch (error) {
+    console.error("Error al agregar al carrito:", error)
+    return { success: false, error: "Error al agregar al carrito" }
+  }
+}
+Fetching de Datos
+Cliente Medusa JS
+typescript// src/lib/medusa/cliente.ts
+import Medusa from "@medusajs/js-sdk"
+
+export const clienteMedusa = new Medusa({
+  baseUrl: process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL!,
+  debug: process.env.NODE_ENV === "development",
+  publishableKey: process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY!,
+})
+Funciones de Fetch con Cache
+typescript// src/lib/medusa/productos.ts
+import { clienteMedusa } from "./cliente"
+import { unstable_cache } from "next/cache"
+
+export const listarProductos = unstable_cache(
+  async () => {
+    const { products } = await clienteMedusa.store.product.list({
+      limit: 100,
+    })
+    return products
+  },
+  ["productos-lista"],
+  {
+    revalidate: 3600, // 1 hora
+    tags: ["productos"],
+  }
+)
+
+export const obtenerProductoPorHandle = unstable_cache(
+  async (handle: string) => {
+    const { products } = await clienteMedusa.store.product.list({
+      handle,
+    })
+    return products[0]
+  },
+  ["producto-detalle"],
+  {
+    revalidate: 3600,
+    tags: ["producto"],
+  }
+)
+Loading y Error States
+Loading UI
+typescript// src/app/productos/loading.tsx
+export default function CargandoProductos() {
+  return (
+    <div className="grid grid-cols-3 gap-4">
+      {Array.from({ length: 9 }).map((_, i) => (
+        <div key={i} className="animate-pulse">
+          <div className="bg-gray-200 h-64 rounded-lg" />
+          <div className="mt-2 h-4 bg-gray-200 rounded" />
+          <div className="mt-2 h-4 bg-gray-200 rounded w-2/3" />
+        </div>
+      ))}
+    </div>
+  )
+}
+Error Boundary
+typescript// src/app/productos/error.tsx
+"use client"
+
+export default function ErrorProductos({
+  error,
+  reset,
+}: {
+  error: Error & { digest?: string }
+  reset: () => void
+}) {
+  return (
+    <div className="text-center py-10">
+      <h2 className="text-2xl font-bold mb-4">
+        Algo salió mal
+      </h2>
+      <p className="text-gray-600 mb-4">
+        {error.message}
+      </p>
+      <button
+        onClick={reset}
+        className="boton-primario"
+      >
+        Intentar nuevamente
+      </button>
+    </div>
+  )
+}
+Optimización de Imágenes
+typescript// src/componentes/productos/ImagenProducto.tsx
+import Image from "next/image"
+
+export function ImagenProducto({ 
+  src, 
+  alt, 
+  prioridad = false 
+}: { 
+  src: string
+  alt: string
+  prioridad?: boolean
+}) {
+  return (
+    <div className="relative aspect-square">
+      <Image
+        src={src}
+        alt={alt}
+        fill
+        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+        className="object-cover"
+        priority={prioridad}
+        quality={85}
+      />
+    </div>
+  )
+}
+Internacionalización (i18n)
+typescript// src/app/[locale]/layout.tsx
+import { notFound } from "next/navigation"
+
+const locales = ["es", "en"]
+
+export function generateStaticParams() {
+  return locales.map((locale) => ({ locale }))
+}
+
+export default function LocaleLayout({
+  children,
+  params: { locale },
+}: {
+  children: React.ReactNode
+  params: { locale: string }
+}) {
+  if (!locales.includes(locale)) notFound()
+
+  return (
+    <html lang={locale}>
+      <body>{children}</body>
+    </html>
+  )
+}
+Configuración Next.js
+typescript// next.config.ts
+import type { NextConfig } from "next"
+
+const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL!.replace(/https?:\/\//, ""),
+      },
+    ],
+  },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "2mb",
+    },
+  },
+}
+
+export default nextConfig
+Sitemap Dinámico
+typescript// src/app/sitemap.ts
+import { MetadataRoute } from "next"
+import { listarProductos } from "@/lib/medusa/productos"
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL!
+
+  // Rutas estáticas
+  const rutas: MetadataRoute.Sitemap = [
+    {
+      url: baseUrl,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 1,
+    },
+    {
+      url: `${baseUrl}/productos`,
+      lastModified: new Date(),
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
+  ]
+
+  // Rutas dinámicas de productos
+  const productos = await listarProductos()
+  const rutasProductos: MetadataRoute.Sitemap = productos.map((producto) => ({
+    url: `${baseUrl}/productos/${producto.handle}`,
+    lastModified: new Date(producto.updated_at),
+    changeFrequency: "weekly",
+    priority: 0.6,
+  }))
+
+  return [...rutas, ...rutasProductos]
+}
+Robots.txt
+typescript// src/app/robots.ts
+import { MetadataRoute } from "next"
+
+export default function robots(): MetadataRoute.Robots {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL!
+
+  return {
+    rules: [
+      {
+        userAgent: "*",
+        allow: "/",
+        disallow: ["/admin/", "/api/", "/checkout/"],
+      },
+    ],
+    sitemap: `${baseUrl}/sitemap.xml`,
+  }
+}
+Performance
+Parallel Data Fetching
+typescript// ✅ BIEN - Parallel
+const [productos, categorias] = await Promise.all([
+  listarProductos(),
+  listarCategorias(),
+])
+
+// ❌ MAL - Sequential
+const productos = await listarProductos()
+const categorias = await listarCategorias()
+Suspense Boundaries
+typescriptimport { Suspense } from "react"
+
+export default function Pagina() {
+  return (
+    <div>
+      <h1>Mi Página</h1>
+      <Suspense fallback={<SkeletonProductos />}>
+        <ListaProductos />
+      </Suspense>
+      <Suspense fallback={<SkeletonReseñas />}>
+        <Reseñas />
+      </Suspense>
+    </div>
+  )
+}
+Accesibilidad
+typescript// Componente con ARIA labels
+export function BotonCarrito({ cantidad }: { cantidad: number }) {
+  return (
+    <button
+      aria-label={`Carrito de compras con ${cantidad} items`}
+      className="relative"
+    >
+      <IconoCarrito />
+      {cantidad > 0 && (
+        <span 
+          className="badge"
+          aria-live="polite"
+        >
+          {cantidad}
+        </span>
+      )}
+    </button>
+  )
+}

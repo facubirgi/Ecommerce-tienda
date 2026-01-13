@@ -1,0 +1,459 @@
+Estándares de Código y Convenciones
+Nomenclatura en Español
+Archivos y Carpetas
+✅ BIEN:
+- componentes/
+- lib/utilidades/
+- tipos/producto.ts
+- hooks/usarCarrito.ts
+
+❌ MAL:
+- components/
+- lib/utils/
+- types/product.ts
+- hooks/useCart.ts
+Variables y Funciones
+typescript// ✅ BIEN - Español descriptivo
+const productoActual = obtenerProducto()
+const totalCarrito = calcularTotal()
+const usuarioAutenticado = verificarAutenticacion()
+
+function procesarPedido(pedido: Pedido) {
+  // ...
+}
+
+async function enviarCorreoConfirmacion(email: string) {
+  // ...
+}
+
+// ❌ MAL - Inglés o mixto
+const currentProduct = getProduct()
+const cartTotal = calculateTotal()
+const authenticatedUser = verifyAuth()
+
+function processPedido(order: Order) {
+  // ...
+}
+Constantes
+typescript// ✅ BIEN
+const TIEMPO_EXPIRACION_TOKEN = 3600
+const LIMITE_PRODUCTOS_POR_PAGINA = 20
+const MENSAJE_ERROR_GENERICO = "Ocurrió un error inesperado"
+
+// ❌ MAL
+const TOKEN_EXPIRATION_TIME = 3600
+const MAX_PRODUCTS_PER_PAGE = 20
+Tipos e Interfaces
+typescript// ✅ BIEN
+interface Producto {
+  id: string
+  titulo: string
+  precio: number
+  descripcion: string
+}
+
+type EstadoPedido = "pendiente" | "procesando" | "completado" | "cancelado"
+
+interface RespuestaApi<T> {
+  datos: T
+  exito: boolean
+  mensaje?: string
+}
+
+// ❌ MAL
+interface Product {
+  id: string
+  title: string
+}
+
+type OrderStatus = "pending" | "processing"
+Enums
+typescript// ✅ BIEN
+enum RolUsuario {
+  CLIENTE = "cliente",
+  ADMINISTRADOR = "administrador",
+  VENDEDOR = "vendedor"
+}
+
+enum EstadoEnvio {
+  PENDIENTE = "pendiente",
+  EN_TRANSITO = "en_transito",
+  ENTREGADO = "entregado"
+}
+TypeScript Strict Mode
+json// tsconfig.json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  }
+}
+Tipado Fuerte
+No usar any
+typescript// ❌ MAL
+function procesarDatos(datos: any) {
+  return datos.map((item: any) => item.valor)
+}
+
+// ✅ BIEN
+interface ElementoDato {
+  id: string
+  valor: number
+}
+
+function procesarDatos(datos: ElementoDato[]): number[] {
+  return datos.map((item) => item.valor)
+}
+Usar tipos específicos
+typescript// ❌ MAL
+function obtenerProducto(id: string): object {
+  // ...
+}
+
+// ✅ BIEN
+function obtenerProducto(id: string): Producto {
+  // ...
+}
+Generics para reutilización
+typescript// ✅ BIEN
+interface RespuestaApi<T> {
+  datos: T
+  exito: boolean
+  mensaje?: string
+}
+
+async function hacerPeticion<T>(url: string): Promise<RespuestaApi<T>> {
+  const respuesta = await fetch(url)
+  return respuesta.json()
+}
+
+// Uso
+const respuesta = await hacerPeticion<Producto[]>("/api/productos")
+Manejo de Errores
+Try-Catch con tipos específicos
+typescript// ✅ BIEN
+try {
+  const resultado = await operacionRiesgosa()
+} catch (error) {
+  if (error instanceof ErrorValidacion) {
+    manejarErrorValidacion(error)
+  } else if (error instanceof ErrorRed) {
+    manejarErrorRed(error)
+  } else {
+    console.error("Error desconocido:", error)
+  }
+}
+
+// Con clase de error personalizada
+class ErrorNegocio extends Error {
+  constructor(
+    message: string,
+    public codigo: string,
+    public detalles?: unknown
+  ) {
+    super(message)
+    this.name = "ErrorNegocio"
+  }
+}
+Result Pattern (Alternativa)
+typescripttype Resultado<T, E = Error> = 
+  | { exito: true; valor: T }
+  | { exito: false; error: E }
+
+async function crearProducto(
+  datos: CrearProductoDto
+): Promise<Resultado<Producto, ErrorValidacion>> {
+  if (!validarDatos(datos)) {
+    return {
+      exito: false,
+      error: new ErrorValidacion("Datos inválidos")
+    }
+  }
+
+  const producto = await guardarProducto(datos)
+  return { exito: true, valor: producto }
+}
+
+// Uso
+const resultado = await crearProducto(datos)
+if (resultado.exito) {
+  console.log(resultado.valor)
+} else {
+  console.error(resultado.error)
+}
+Funciones Puras
+typescript// ✅ BIEN - Función pura
+function calcularDescuento(precio: number, porcentaje: number): number {
+  return precio * (1 - porcentaje / 100)
+}
+
+// ❌ MAL - Efectos secundarios
+let descuentoGlobal = 0
+
+function calcularDescuento(precio: number, porcentaje: number): number {
+  descuentoGlobal = precio * (porcentaje / 100) // ❌ Modifica estado global
+  return precio - descuentoGlobal
+}
+Inmutabilidad
+typescript// ✅ BIEN - Inmutable
+function agregarProductoAlCarrito(
+  carrito: Carrito, 
+  producto: Producto
+): Carrito {
+  return {
+    ...carrito,
+    items: [...carrito.items, producto]
+  }
+}
+
+// ❌ MAL - Mutable
+function agregarProductoAlCarrito(
+  carrito: Carrito, 
+  producto: Producto
+): void {
+  carrito.items.push(producto) // ❌ Modifica el original
+}
+Composición sobre Herencia
+typescript// ✅ BIEN - Composición
+interface ServicioLogger {
+  log(mensaje: string): void
+}
+
+interface ServicioCache {
+  obtener(clave: string): unknown
+  guardar(clave: string, valor: unknown): void
+}
+
+class ProductoService {
+  constructor(
+    private logger: ServicioLogger,
+    private cache: ServicioCache
+  ) {}
+
+  async obtenerProducto(id: string): Promise<Producto> {
+    this.logger.log(`Obteniendo producto ${id}`)
+    
+    const enCache = this.cache.obtener(id)
+    if (enCache) return enCache as Producto
+
+    const producto = await this.buscarProducto(id)
+    this.cache.guardar(id, producto)
+    return producto
+  }
+}
+Organización de Imports
+typescript// ✅ BIEN - Organizado y agrupado
+// 1. Imports de React/Next.js
+import { useState, useEffect } from "react"
+import Image from "next/image"
+
+// 2. Imports de librerías externas
+import { z } from "zod"
+import clsx from "clsx"
+
+// 3. Imports internos - Absolutos
+import { Button } from "@/componentes/ui/Button"
+import { usarCarrito } from "@/hooks/usarCarrito"
+import type { Producto } from "@/tipos/producto"
+
+// 4. Imports relativos
+import { calcularTotal } from "./utilidades"
+import estilos from "./Producto.module.css"
+
+// ❌ MAL - Desordenado
+import estilos from "./Producto.module.css"
+import { useState } from "react"
+import type { Producto } from "@/tipos/producto"
+import clsx from "clsx"
+Documentación con JSDoc
+typescript/**
+ * Calcula el precio final de un producto aplicando descuentos e impuestos
+ * 
+ * @param precioBase - Precio base del producto en centavos
+ * @param descuento - Porcentaje de descuento (0-100)
+ * @param impuesto - Porcentaje de impuesto (0-100)
+ * @returns Precio final en centavos
+ * 
+ * @example
+ * ```typescript
+ * const precioFinal = calcularPrecioFinal(10000, 10, 21)
+ * // Retorna 9790 (precio con 10% desc y 21% imp)
+ * ```
+ */
+export function calcularPrecioFinal(
+  precioBase: number,
+  descuento: number,
+  impuesto: number
+): number {
+  const conDescuento = precioBase * (1 - descuento / 100)
+  return Math.round(conDescuento * (1 + impuesto / 100))
+}
+Patrones de Componentes React
+Props con TypeScript
+typescript// ✅ BIEN
+interface PropsTarjetaProducto {
+  producto: Producto
+  mostrarPrecio?: boolean
+  alClickear?: (id: string) => void
+  className?: string
+}
+
+export function TarjetaProducto({
+  producto,
+  mostrarPrecio = true,
+  alClickear,
+  className,
+}: PropsTarjetaProducto) {
+  // ...
+}
+
+// ❌ MAL - Sin tipos
+export function TarjetaProducto(props) {
+  // ...
+}
+Children Pattern
+typescriptinterface PropsContenedor {
+  children: React.ReactNode
+  titulo?: string
+}
+
+export function Contenedor({ children, titulo }: PropsContenedor) {
+  return (
+    <div className="contenedor">
+      {titulo && <h2>{titulo}</h2>}
+      {children}
+    </div>
+  )
+}
+Compound Components
+typescript// Componente padre
+interface PropsListaProductos {
+  children: React.ReactNode
+}
+
+export function ListaProductos({ children }: PropsListaProductos) {
+  return <div className="grid grid-cols-3 gap-4">{children}</div>
+}
+
+// Subcomponente
+interface PropsItemProducto {
+  producto: Producto
+}
+
+ListaProductos.Item = function ItemProducto({ producto }: PropsItemProducto) {
+  return <div>{producto.titulo}</div>
+}
+
+// Uso
+<ListaProductos>
+  {productos.map(p => (
+    <ListaProductos.Item key={p.id} producto={p} />
+  ))}
+</ListaProductos>
+Hooks Personalizados
+typescript// ✅ BIEN - Hook reutilizable
+export function usarCarrito() {
+  const [carrito, setCarrito] = useState<Carrito | null>(null)
+  const [cargando, setCargando] = useState(true)
+
+  useEffect(() => {
+    cargarCarrito()
+  }, [])
+
+  async function cargarCarrito() {
+    setCargando(true)
+    const carritoId = localStorage.getItem("carrito_id")
+    if (carritoId) {
+      const carritoData = await obtenerCarrito(carritoId)
+      setCarrito(carritoData)
+    }
+    setCargando(false)
+  }
+
+  async function agregarItem(variantId: string) {
+    // ...
+  }
+
+  return {
+    carrito,
+    cargando,
+    agregarItem,
+  }
+}
+Validación de Datos (Zod)
+typescriptimport { z } from "zod"
+
+// Schema de validación
+export const esquemaCrearProducto = z.object({
+  titulo: z.string().min(3, "El título debe tener al menos 3 caracteres"),
+  descripcion: z.string().optional(),
+  precio: z.number().positive("El precio debe ser positivo"),
+  stock: z.number().int().nonnegative("El stock no puede ser negativo"),
+  sku: z.string().regex(/^[A-Z0-9-]+$/, "SKU inválido"),
+})
+
+// Tipo inferido del schema
+export type CrearProductoDto = z.infer<typeof esquemaCrearProducto>
+
+// Uso
+function validarProducto(datos: unknown): CrearProductoDto {
+  return esquemaCrearProducto.parse(datos)
+}
+Testing
+Nombres de Tests en Español
+typescriptdescribe("ProductoService", () => {
+  describe("obtenerProducto", () => {
+    it("debe retornar un producto cuando existe", async () => {
+      // Arrange
+      const idProducto = "prod_123"
+      
+      // Act
+      const resultado = await productoService.obtenerProducto(idProducto)
+      
+      // Assert
+      expect(resultado).toBeDefined()
+      expect(resultado.id).toBe(idProducto)
+    })
+
+    it("debe lanzar error cuando el producto no existe", async () => {
+      // Arrange
+      const idInexistente = "prod_999"
+      
+      // Act & Assert
+      await expect(
+        productoService.obtenerProducto(idInexistente)
+      ).rejects.toThrow("Producto no encontrado")
+    })
+  })
+})
+Prettier Config
+json{
+  "semi": false,
+  "singleQuote": false,
+  "tabWidth": 2,
+  "trailingComma": "es5",
+  "printWidth": 80,
+  "arrowParens": "always"
+}
+ESLint Config
+json{
+  "extends": [
+    "next/core-web-vitals",
+    "plugin:@typescript-eslint/recommended"
+  ],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/no-unused-vars": "error",
+    "no-console": ["warn", { "allow": ["error", "warn"] }]
+  }
+}

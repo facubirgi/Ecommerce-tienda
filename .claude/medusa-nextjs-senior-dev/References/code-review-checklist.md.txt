@@ -1,0 +1,293 @@
+Checklist de Code Review
+Anti-Patterns Comunes a Evitar
+1. Modificación del Core de Medusa
+typescript// ❌ CRÍTICO - Nunca hacer esto
+// No modificar archivos en node_modules/@medusajs
+// No extender clases core directamente sin usar el sistema de módulos
+
+// ✅ CORRECTO
+// Usar módulos personalizados y extensiones
+export default Module("mi-modulo", {
+  service: MiServicio
+})
+2. Uso de any en TypeScript
+typescript// ❌ MAL
+function procesarDatos(datos: any) {
+  return datos.resultado
+}
+
+// ✅ BIEN
+interface Respuesta {
+  resultado: string
+}
+
+function procesarDatos(datos: Respuesta): string {
+  return datos.resultado
+}
+3. Mutación Directa de Estado
+typescript// ❌ MAL
+carrito.items.push(nuevoItem)
+
+// ✅ BIEN
+const carritoActualizado = {
+  ...carrito,
+  items: [...carrito.items, nuevoItem]
+}
+4. Falta de Manejo de Errores
+typescript// ❌ MAL
+async function obtenerProducto(id: string) {
+  const producto = await fetch(`/api/productos/${id}`)
+  return producto.json()
+}
+
+// ✅ BIEN
+async function obtenerProducto(id: string): Promise<Producto> {
+  try {
+    const respuesta = await fetch(`/api/productos/${id}`)
+    
+    if (!respuesta.ok) {
+      throw new ErrorHttp(
+        respuesta.status,
+        "Error al obtener producto"
+      )
+    }
+    
+    return await respuesta.json()
+  } catch (error) {
+    if (error instanceof ErrorHttp) {
+      throw error
+    }
+    throw new Error("Error de red al obtener producto")
+  }
+}
+5. N+1 Queries
+typescript// ❌ MAL - Query por cada producto
+const pedidos = await pedidoService.list()
+for (const pedido of pedidos) {
+  const cliente = await clienteService.retrieve(pedido.customer_id)
+  pedido.cliente = cliente
+}
+
+// ✅ BIEN - Eager loading
+const pedidos = await pedidoService.list({
+  relations: ["customer", "items.variant"]
+})
+6. Falta de Validación de Inputs
+typescript// ❌ MAL
+export async function POST(req: Request) {
+  const body = await req.json()
+  const producto = await crearProducto(body)
+  return Response.json(producto)
+}
+
+// ✅ BIEN
+import { z } from "zod"
+
+const esquema = z.object({
+  titulo: z.string().min(1),
+  precio: z.number().positive()
+})
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json()
+    const datosValidados = esquema.parse(body)
+    const producto = await crearProducto(datosValidados)
+    return Response.json(producto)
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return Response.json(
+        { error: "Datos inválidos", detalles: error.errors },
+        { status: 400 }
+      )
+    }
+    return Response.json(
+      { error: "Error interno" },
+      { status: 500 }
+    )
+  }
+}
+7. Hardcoded Values
+typescript// ❌ MAL
+const urlApi = "https://api.ejemplo.com"
+const limiteProductos = 50
+
+// ✅ BIEN
+const urlApi = process.env.API_URL!
+const limiteProductos = Number(process.env.LIMITE_PRODUCTOS) || 50
+8. Componentes Client Innecesarios
+typescript// ❌ MAL - Client component cuando no es necesario
+"use client"
+
+export function ListaProductos({ productos }: { productos: Producto[] }) {
+  return (
+    <div>
+      {productos.map(p => (
+        <TarjetaProducto key={p.id} producto={p} />
+      ))}
+    </div>
+  )
+}
+
+// ✅ BIEN - Server component por defecto
+export function ListaProductos({ productos }: { productos: Producto[] }) {
+  return (
+    <div>
+      {productos.map(p => (
+        <TarjetaProducto key={p.id} producto={p} />
+      ))}
+    </div>
+  )
+}
+9. Falta de Keys en Listas
+typescript// ❌ MAL
+productos.map(producto => (
+  <div>{producto.titulo}</div>
+))
+
+// ✅ BIEN
+productos.map(producto => (
+  <div key={producto.id}>{producto.titulo}</div>
+))
+10. Dependencias de useEffect Incorrectas
+typescript// ❌ MAL
+useEffect(() => {
+  cargarProductos(filtro)
+}, []) // ❌ Falta 'filtro' en dependencias
+
+// ✅ BIEN
+useEffect(() => {
+  cargarProductos(filtro)
+}, [filtro])
+Checklist de Calidad de Código
+TypeScript
+
+ No hay uso de any (usar unknown si es necesario)
+ Todas las funciones tienen tipos de retorno explícitos
+ Las interfaces/tipos están definidos para todos los objetos
+ Se usa strict: true en tsconfig.json
+ No hay errores de TypeScript
+
+React/Next.js
+
+ Los Server Components no usan "use client" innecesariamente
+ Los Client Components que usan hooks tienen "use client"
+ Todas las listas usan keys únicas
+ Las imágenes usan el componente next/image
+ Metadata SEO está implementada correctamente
+ Los componentes tienen props tipadas
+
+Medusa Backend
+
+ No se modifica código del core de Medusa
+ Se usan módulos personalizados para extensiones
+ Los workflows tienen compensación (rollback)
+ Los subscribers están correctamente registrados
+ Las migraciones tienen up() y down()
+ Los servicios usan inyección de dependencias
+
+Base de Datos
+
+ No hay N+1 queries (usar eager loading)
+ Los índices están en campos consultados frecuentemente
+ Las transacciones se usan para operaciones múltiples
+ Las migraciones son reversibles
+
+Seguridad
+
+ Los inputs de usuario están validados (Zod)
+ El contenido HTML está sanitizado
+ Las variables de entorno sensibles no están en el código
+ Los endpoints admin verifican autenticación
+ No hay SQL injection (usar ORM)
+
+Performance
+
+ Las queries incluyen solo campos necesarios
+ Se usa caching donde es apropiado
+ Las imágenes están optimizadas
+ Se usan Suspense boundaries para loading
+ No hay re-renders innecesarios
+
+Manejo de Errores
+
+ Todos los try-catch manejan errores específicos
+ Los errores tienen mensajes descriptivos en español
+ Se usan boundaries de error en React
+ Los endpoints API retornan status codes correctos
+
+Nomenclatura
+
+ Todo el código está en español (variables, funciones, tipos)
+ Los nombres son descriptivos y claros
+ Se siguen convenciones (camelCase, PascalCase)
+ Los archivos tienen nombres en español
+
+Testing
+
+ Las funciones críticas tienen tests
+ Los tests cubren casos edge
+ Los nombres de tests están en español
+ Se mockean dependencias externas
+
+Documentación
+
+ Las funciones complejas tienen JSDoc
+ Los tipos complejos están documentados
+ Los endpoints API están documentados
+ El README está actualizado
+
+Scripts de Validación
+Script para detectar any
+bash# Buscar uso de 'any' en el código
+grep -r ": any" src/ --include="*.ts" --include="*.tsx"
+Script para detectar console.log
+bash# Buscar console.log que no sean error/warn
+grep -r "console.log" src/ --include="*.ts" --include="*.tsx"
+Script para detectar imports en inglés
+bash# Detectar carpetas/archivos con nombres en inglés
+find src/ -name "*component*" -o -name "*utils*" -o -name "*helper*"
+Flujo de Code Review
+
+Pre-commit: ESLint + Prettier
+Pre-push: Tests unitarios
+Pull Request:
+
+Checklist manual
+Code review por par
+Tests de integración
+
+
+Pre-merge:
+
+Validación final
+Build exitoso
+
+
+
+Mensajes de Commit
+Formato:
+tipo(alcance): descripción breve
+
+Descripción detallada opcional
+
+BREAKING CHANGE: descripción si aplica
+Tipos:
+
+feat: Nueva funcionalidad
+fix: Corrección de bug
+refactor: Refactorización sin cambio de funcionalidad
+style: Cambios de formato/estilo
+test: Agregar/modificar tests
+docs: Documentación
+chore: Tareas de mantenimiento
+
+Ejemplos:
+feat(productos): agregar filtro por categoría
+
+Implementa un nuevo filtro en la página de productos
+que permite filtrar por categoría usando query params
+
+fix(carrito): corregir cálculo de total con descuentos
+
+El cálculo no consideraba descuentos por volumen

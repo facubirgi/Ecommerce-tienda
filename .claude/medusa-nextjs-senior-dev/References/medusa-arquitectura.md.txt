@@ -1,0 +1,317 @@
+Arquitectura y Buenas Prácticas - Medusa v2
+Principios Fundamentales
+1. No Modificar el Core
+
+NUNCA modificar archivos dentro de node_modules/@medusajs
+Usar siempre el sistema de extensiones y módulos de Medusa
+Aprovechar los hooks y subscribers para lógica personalizada
+Utilizar workflows para orquestar operaciones complejas
+
+2. Extensibilidad Sobre Modificación
+typescript// ❌ MAL - Modificar entidades core
+// No tocar Product, Order, Customer directamente
+
+// ✅ BIEN - Extender con módulos personalizados
+export default defineLink(ProductModule.linkable.product, {
+  nombrePersonalizado: true,
+  descripcionExtendida: true
+})
+Estructura de Proyecto Recomendada
+backend/
+├── src/
+│   ├── modules/               # Módulos personalizados
+│   │   ├── promociones/
+│   │   ├── fidelidad/
+│   │   └── analíticas/
+│   ├── workflows/             # Workflows personalizados
+│   │   ├── procesar-pedido/
+│   │   ├── gestionar-inventario/
+│   │   └── enviar-notificaciones/
+│   ├── subscribers/           # Event handlers
+│   │   ├── pedido.ts
+│   │   ├── producto.ts
+│   │   └── cliente.ts
+│   ├── api/                   # Rutas API personalizadas
+│   │   └── admin/
+│   │   └── store/
+│   └── jobs/                  # Scheduled jobs
+├── medusa-config.ts          # Configuración principal
+└── package.json
+Módulos Personalizados
+Anatomía de un Módulo
+typescript// src/modules/mi-modulo/index.ts
+import { Module } from "@medusajs/framework/utils"
+
+export const MI_MODULO = "miModulo"
+
+export default Module(MI_MODULO, {
+  service: MiServicio,
+  loaders: [miLoader]
+})
+Service Pattern
+typescript// src/modules/mi-modulo/service.ts
+import { MedusaService } from "@medusajs/framework/utils"
+
+class MiServicio extends MedusaService({
+  MiModelo
+}) {
+  async crearRegistro(datos: CrearDTO): Promise<MiModelo> {
+    // Validaciones
+    this.validarDatos(datos)
+    
+    // Lógica de negocio
+    const registro = this.miModeloRepository_.create(datos)
+    
+    // Emitir evento
+    await this.eventBusService_.emit("mi-modulo.creado", {
+      id: registro.id
+    })
+    
+    return registro
+  }
+
+  private validarDatos(datos: CrearDTO): void {
+    if (!datos.campoRequerido) {
+      throw new MedusaError(
+        MedusaError.Types.INVALID_DATA,
+        "El campo requerido es obligatorio"
+      )
+    }
+  }
+}
+Workflows
+Estructura de un Workflow
+typescript// src/workflows/procesar-pedido/index.ts
+import { createWorkflow, WorkflowResponse } from "@medusajs/framework/workflows"
+import { validarInventarioStep } from "./steps/validar-inventario"
+import { procesarPagoStep } from "./steps/procesar-pago"
+import { crearEnvioStep } from "./steps/crear-envio"
+import { notificarClienteStep } from "./steps/notificar-cliente"
+
+export const procesarPedidoWorkflow = createWorkflow(
+  "procesar-pedido",
+  function (input: ProcesarPedidoInput) {
+    // Paso 1: Validar inventario
+    const inventarioValido = validarInventarioStep(input)
+    
+    // Paso 2: Procesar pago (compensable)
+    const pago = procesarPagoStep(input.pagoInfo)
+    
+    // Paso 3: Crear envío
+    const envio = crearEnvioStep({
+      pedidoId: input.pedidoId,
+      direccion: input.direccionEnvio
+    })
+    
+    // Paso 4: Notificar cliente
+    notificarClienteStep({
+      clienteId: input.clienteId,
+      pedidoId: input.pedidoId
+    })
+    
+    return new WorkflowResponse({
+      pedidoId: input.pedidoId,
+      pagoId: pago.id,
+      envioId: envio.id
+    })
+  }
+)
+Steps con Compensación
+typescript// src/workflows/procesar-pedido/steps/procesar-pago.ts
+import { createStep, StepResponse } from "@medusajs/framework/workflows"
+
+export const procesarPagoStep = createStep(
+  "procesar-pago-step",
+  async (input: PagoInput, { container }) => {
+    const pagoService = container.resolve("pagoService")
+    
+    // Procesar pago
+    const pago = await pagoService.procesar(input)
+    
+    // Retornar con función de compensación
+    return new StepResponse(pago, {
+      pagoId: pago.id
+    })
+  },
+  // Función de compensación (rollback)
+  async (compensacionData, { container }) => {
+    if (compensacionData?.pagoId) {
+      const pagoService = container.resolve("pagoService")
+      await pagoService.reembolsar(compensacionData.pagoId)
+    }
+  }
+)
+Subscribers (Event Handlers)
+typescript// src/subscribers/pedido.ts
+import { type SubscriberArgs } from "@medusajs/framework"
+
+export default async function pedidoCreadoHandler({
+  event,
+  container
+}: SubscriberArgs<{ id: string }>) {
+  const notificacionService = container.resolve("notificacionService")
+  const pedidoService = container.resolve("pedidoService")
+  
+  const pedido = await pedidoService.retrieve(event.data.id, {
+    relations: ["customer", "items"]
+  })
+  
+  // Enviar notificación
+  await notificacionService.enviarConfirmacionPedido(pedido)
+}
+
+export const config = {
+  event: "order.placed"
+}
+Rutas API Personalizadas
+Store API (Para clientes)
+typescript// src/api/store/promociones/route.ts
+import { MedusaRequest, MedusaResponse } from "@medusajs/framework"
+
+export async function GET(
+  req: MedusaRequest,
+  res: MedusaResponse
+): Promise<void> {
+  const promocionesService = req.scope.resolve("promocionesService")
+  
+  const promociones = await promocionesService.listarActivas()
+  
+  res.json({ promociones })
+}
+Admin API (Para administradores)
+typescript// src/api/admin/analíticas/route.ts
+import { 
+  MedusaRequest, 
+  MedusaResponse,
+  AuthenticatedMedusaRequest
+} from "@medusajs/framework"
+
+export async function GET(
+  req: AuthenticatedMedusaRequest,
+  res: MedusaResponse
+): Promise<void> {
+  const analíticasService = req.scope.resolve("analíticasService")
+  
+  // Validar permisos de admin
+  if (!req.auth?.actor_id) {
+    return res.status(401).json({ message: "No autorizado" })
+  }
+  
+  const datos = await analíticasService.obtenerDashboard()
+  
+  res.json(datos)
+}
+Migraciones de Base de Datos
+typescript// src/migrations/1234567890-agregar-campo-producto.ts
+import { Migration } from "@mikro-orm/migrations"
+
+export class Migration1234567890 extends Migration {
+  async up(): Promise<void> {
+    this.addSql(`
+      ALTER TABLE "producto" 
+      ADD COLUMN "campo_personalizado" VARCHAR(255);
+    `)
+  }
+
+  async down(): Promise<void> {
+    this.addSql(`
+      ALTER TABLE "producto" 
+      DROP COLUMN "campo_personalizado";
+    `)
+  }
+}
+Manejo de Errores
+typescriptimport { MedusaError } from "@medusajs/framework/utils"
+
+// Errores tipados
+throw new MedusaError(
+  MedusaError.Types.NOT_FOUND,
+  "Producto no encontrado"
+)
+
+throw new MedusaError(
+  MedusaError.Types.INVALID_DATA,
+  "Datos de entrada inválidos"
+)
+
+throw new MedusaError(
+  MedusaError.Types.UNAUTHORIZED,
+  "No tiene permisos para esta operación"
+)
+Testing
+typescript// src/modules/mi-modulo/__tests__/service.spec.ts
+import { MiServicio } from "../service"
+
+describe("MiServicio", () => {
+  let service: MiServicio
+  
+  beforeEach(() => {
+    service = new MiServicio({
+      miModeloRepository: mockRepository,
+      eventBusService: mockEventBus
+    })
+  })
+  
+  it("debe crear un registro correctamente", async () => {
+    const datos = { campo: "valor" }
+    const resultado = await service.crearRegistro(datos)
+    
+    expect(resultado).toBeDefined()
+    expect(resultado.campo).toBe("valor")
+  })
+})
+Configuración Medusa
+typescript// medusa-config.ts
+import { defineConfig } from "@medusajs/framework/utils"
+
+export default defineConfig({
+  projectConfig: {
+    databaseUrl: process.env.DATABASE_URL,
+    http: {
+      storeCors: process.env.STORE_CORS,
+      adminCors: process.env.ADMIN_CORS,
+      authCors: process.env.AUTH_CORS,
+    },
+  },
+  modules: [
+    {
+      resolve: "./src/modules/promociones",
+      options: {
+        // Opciones del módulo
+      }
+    }
+  ]
+})
+Performance y Optimización
+Eager Loading
+typescript// ✅ BIEN - Cargar relaciones necesarias
+const pedido = await pedidoService.retrieve(id, {
+  relations: ["customer", "items.variant.product", "shipping_address"]
+})
+
+// ❌ MAL - Múltiples queries
+const pedido = await pedidoService.retrieve(id)
+const cliente = await clienteService.retrieve(pedido.customer_id)
+const items = await itemService.list({ pedido_id: id })
+Índices de Base de Datos
+typescript// En modelos, agregar índices estratégicos
+@Index("idx_producto_sku")
+sku: string
+
+@Index(["categoria_id", "activo"])
+Seguridad
+Validación de Inputs
+typescriptimport { z } from "zod"
+
+const crearProductoSchema = z.object({
+  titulo: z.string().min(3).max(255),
+  precio: z.number().positive(),
+  sku: z.string().regex(/^[A-Z0-9-]+$/)
+})
+
+// En el endpoint
+const datosValidados = crearProductoSchema.parse(req.body)
+Sanitización
+typescriptimport DOMPurify from "isomorphic-dompurify"
+
+const descripcionLimpia = DOMPurify.sanitize(descripcionHtml)
