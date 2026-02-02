@@ -1,4 +1,4 @@
-import { loadEnv, defineConfig, Modules } from '@medusajs/framework/utils'
+import { loadEnv, defineConfig } from '@medusajs/framework/utils'
 
 loadEnv(process.env.NODE_ENV || 'development', process.cwd())
 
@@ -17,25 +17,5 @@ module.exports = defineConfig({
   admin: {
     backendUrl: process.env.BACKEND_URL,
     storefrontUrl: process.env.STORE_URL,
-  },
-  modules: {
-    [Modules.PAYMENT]: {
-      resolve: "@medusajs/medusa/payment",
-      options: {
-        providers: [
-          {
-            resolve: "./src/modules/mercadopago",
-            id: "mercadopago",
-            options: {
-              access_token: process.env.MERCADOPAGO_ACCESS_TOKEN,
-              back_url_success: process.env.MERCADOPAGO_BACK_URL_SUCCESS,
-              back_url_failure: process.env.MERCADOPAGO_BACK_URL_FAILURE,
-              back_url_pending: process.env.MERCADOPAGO_BACK_URL_PENDING,
-              notification_url: process.env.MERCADOPAGO_NOTIFICATION_URL,
-            },
-          },
-        ],
-      },
-    },
   },
 })
