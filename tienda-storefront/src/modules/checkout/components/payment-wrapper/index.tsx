@@ -3,8 +3,9 @@
 import { loadStripe } from "@stripe/stripe-js"
 import React from "react"
 import StripeWrapper from "./stripe-wrapper"
+import MercadoPagoWrapper from "./mercadopago-wrapper"
 import { HttpTypes } from "@medusajs/types"
-import { isStripeLike } from "@lib/constants"
+import { isStripeLike, isMercadoPago } from "@lib/constants"
 
 type PaymentWrapperProps = {
   cart: HttpTypes.StoreCart
@@ -41,6 +42,14 @@ const PaymentWrapper: React.FC<PaymentWrapperProps> = ({ cart, children }) => {
       >
         {children}
       </StripeWrapper>
+    )
+  }
+
+  if (isMercadoPago(paymentSession?.provider_id) && paymentSession) {
+    return (
+      <MercadoPagoWrapper paymentSession={paymentSession}>
+        {children}
+      </MercadoPagoWrapper>
     )
   }
 

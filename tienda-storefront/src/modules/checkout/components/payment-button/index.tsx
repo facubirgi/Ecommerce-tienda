@@ -1,6 +1,6 @@
 "use client"
 
-import { isManual, isStripeLike } from "@lib/constants"
+import { isManual, isStripeLike, isMercadoPago } from "@lib/constants"
 import { placeOrder } from "@lib/data/cart"
 import { HttpTypes } from "@medusajs/types"
 import { Button } from "@medusajs/ui"
@@ -30,6 +30,14 @@ const PaymentButton: React.FC<PaymentButtonProps> = ({
     case isStripeLike(paymentSession?.provider_id):
       return (
         <StripePaymentButton
+          notReady={notReady}
+          cart={cart}
+          data-testid={dataTestId}
+        />
+      )
+    case isMercadoPago(paymentSession?.provider_id):
+      return (
+        <MercadoPagoPaymentButton
           notReady={notReady}
           cart={cart}
           data-testid={dataTestId}
@@ -147,6 +155,58 @@ const StripePaymentButton = ({
       <ErrorMessage
         error={errorMessage}
         data-testid="stripe-payment-error-message"
+      />
+    </>
+  )
+}
+
+const MercadoPagoPaymentButton = ({
+  cart,
+  notReady,
+  "data-testid": dataTestId,
+}: {
+  cart: HttpTypes.StoreCart
+  notReady: boolean
+  "data-testid"?: string
+}) => {
+  const [submitting, setSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const paymentSession = cart.payment_collection?.payment_sessions?.find(
+    (s) => s.status === "pending"
+  )
+
+  const handlePayment = () => {
+    setSubmitting(true)
+
+    // Get the Mercado Pago init_point from the payment session
+    const initPoint = paymentSession?.data?.init_point as string
+
+    if (!initPoint) {
+      setErrorMessage("Error: No se pudo obtener el enlace de pago de Mercado Pago")
+      setSubmitting(false)
+      return
+    }
+
+    // Redirect to Mercado Pago checkout
+    window.location.href = initPoint
+  }
+
+  return (
+    <>
+      <Button
+        disabled={notReady}
+        isLoading={submitting}
+        onClick={handlePayment}
+        size="large"
+        data-testid={dataTestId}
+        className="bg-black hover:bg-gray-800 text-white font-serif tracking-wide"
+      >
+        Pagar con Mercado Pago
+      </Button>
+      <ErrorMessage
+        error={errorMessage}
+        data-testid="mercadopago-payment-error-message"
       />
     </>
   )

@@ -1,0 +1,114 @@
+# ============================================
+# DOCKER COMPOSE - LOCAL DEVELOPMENT
+# ============================================
+# Usage:
+#   docker-compose up -d          # Start all services
+#   docker-compose logs -f        # View logs
+#   docker-compose down           # Stop all services
+#   docker-compose down -v        # Stop and remove volumes
+
+services:
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: medusa-postgres
+    environment:
+      POSTGRES_USER: medusa
+      POSTGRES_PASSWORD: medusa
+      POSTGRES_DB: medusa-v2
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medusa -d medusa-v2"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Redis Cache
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: medusa-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Medusa Backend
+  # ============================================
+  medusa:
+    build:
+      context: ./tienda
+      dockerfile: Dockerfile
+    container_name: medusa-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Database
+      DATABASE_URL: postgres://medusa:medusa@postgres:5432/medusa-v2
+      DB_NAME: medusa-v2
+      # Redis
+      REDIS_URL: redis://redis:6379
+      # Security (change these in production!)
+      JWT_SECRET: ${JWT_SECRET:-development-jwt-secret-change-me}
+      COOKIE_SECRET: ${COOKIE_SECRET:-development-cookie-secret-change-me}
+      # CORS
+      STORE_CORS: http://localhost:8000
+      ADMIN_CORS: http://localhost:5173,http://localhost:9000
+      AUTH_CORS: http://localhost:5173,http://localhost:9000,http://localhost:8000
+      # URLs
+      STORE_URL: http://localhost:8000
+      BACKEND_URL: http://localhost:9000
+      # MercadoPago (set in .env file)
+      MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN}
+      MERCADOPAGO_BACK_URL_SUCCESS: http://localhost:8000/checkout/success
+      MERCADOPAGO_BACK_URL_FAILURE: http://localhost:8000/checkout/failure
+      MERCADOPAGO_BACK_URL_PENDING: http://localhost:8000/checkout/pending
+      MERCADOPAGO_NOTIFICATION_URL: http://localhost:9000/webhooks/mercadopago
+    ports:
+      - "9000:9000"
+    volumes:
+      - medusa-uploads:/app/uploads
+
+  # ============================================
+  # Next.js Storefront
+  # ============================================
+  storefront:
+    build:
+      context: ./tienda-storefront
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY: ${NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_MEDUSA_BACKEND_URL: http://medusa:9000
+        NEXT_PUBLIC_BASE_URL: http://localhost:8000
+        NEXT_PUBLIC_DEFAULT_REGION: ar
+        NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY: ${NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY}
+    container_name: medusa-storefront
+    depends_on:
+      - medusa
+    environment:
+      MEDUSA_BACKEND_URL: http://medusa:9000
+      NEXT_PUBLIC_MEDUSA_BACKEND_URL: http://localhost:9000
+      NEXT_PUBLIC_BASE_URL: http://localhost:8000
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET:-development-revalidate-secret}
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres-data:
+  redis-data:
+  medusa-uploads:

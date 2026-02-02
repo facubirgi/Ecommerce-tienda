@@ -1,7 +1,7 @@
 "use client"
 
 import { RadioGroup } from "@headlessui/react"
-import { isStripeLike, paymentInfoMap } from "@lib/constants"
+import { isStripeLike, isMercadoPago, paymentInfoMap } from "@lib/constants"
 import { initiatePaymentSession } from "@lib/data/cart"
 import { CheckCircleSolid, CreditCard } from "@medusajs/icons"
 import { Button, Container, Heading, Text, clx } from "@medusajs/ui"
@@ -41,7 +41,7 @@ const Payment = ({
   const setPaymentMethod = async (method: string) => {
     setError(null)
     setSelectedPaymentMethod(method)
-    if (isStripeLike(method)) {
+    if (isStripeLike(method) || isMercadoPago(method)) {
       await initiatePaymentSession(cart, {
         provider_id: method,
       })
@@ -85,6 +85,7 @@ const Payment = ({
         })
       }
 
+      // For Mercado Pago and other non-card methods, go directly to review
       if (!shouldInputCard) {
         return router.push(
           pathname + "?" + createQueryString("step", "review"),
@@ -231,6 +232,8 @@ const Payment = ({
                   <Text>
                     {isStripeLike(selectedPaymentMethod) && cardBrand
                       ? cardBrand
+                      : isMercadoPago(selectedPaymentMethod)
+                      ? "Redirigirá a Mercado Pago"
                       : "Aparecerá otro paso"}
                   </Text>
                 </div>

@@ -1,0 +1,34 @@
+# ============================================
+# ROOT PROJECT .gitignore
+# ============================================
+
+# MCP configuration (may contain sensitive data)
+.mcp.json
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker volumes (if using local volumes)
+docker-data/
+postgres-data/
+redis-data/
