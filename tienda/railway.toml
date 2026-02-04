@@ -1,14 +1,10 @@
 [build]
-builder = "nixpacks"
-buildCommand = "npm cache clean --force && npm install --include=dev && npm run build"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "npm run start"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 numReplicas = 1
-
-[build.env]
-NIXPACKS_NODE_VERSION = "20"
